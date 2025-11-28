@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
 
 dotenv.config();
@@ -12,10 +12,9 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || 'your-api-key-here'
-});
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyC1Mac5Hmftz_C9OLHnx1TzrHKO1HvKMaU');
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 // Store user sessions (in production, use a database)
 const userSessions = new Map();
@@ -71,7 +70,7 @@ app.post('/api/interview/start', async (req, res) => {
     
     contextPrompt += `\n\nFormat as JSON array: [{"question": "...", "expectedTopics": ["..."]}]`;
     
-    // Default questions if OpenAI fails or isn't configured
+    // Default questions if Gemini fails or isn't configured
     const defaultQuestions = [
       {
         question: cvInfo 
@@ -103,26 +102,36 @@ app.post('/api/interview/start', async (req, res) => {
     
     let questions = defaultQuestions;
     
-    // Try to use OpenAI if available, but don't fail if it's not
-    if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-api-key-here') {
+    // Try to use Gemini if available, but don't fail if it's not
+    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'your-api-key-here') {
       try {
-        const completion = await Promise.race([
-          openai.chat.completions.create({
-            model: "gpt-4",
-            messages: [{ role: "user", content: contextPrompt }],
-            temperature: 0.7
-          }),
+        console.log('Calling Gemini API...');
+        const result = await Promise.race([
+          model.generateContent(contextPrompt),
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('OpenAI timeout')), 8000)
+            setTimeout(() => reject(new Error('Gemini timeout')), 15000) // Increased to 15 seconds
           )
         ]);
         
-        const parsed = JSON.parse(completion.choices[0].message.content);
+        const response = await result.response;
+        const text = response.text();
+        console.log('Gemini response received, length:', text.length);
+        
+        // Try to extract JSON from the response (Gemini sometimes wraps it in markdown)
+        let jsonText = text;
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          jsonText = jsonMatch[0];
+        }
+        
+        const parsed = JSON.parse(jsonText);
         if (Array.isArray(parsed) && parsed.length > 0) {
           questions = parsed;
+          console.log('Successfully parsed', parsed.length, 'questions from Gemini');
         }
-      } catch (openaiError) {
-        console.log('OpenAI not available, using personalized default questions:', openaiError.message);
+      } catch (geminiError) {
+        console.error('Gemini error:', geminiError.message);
+        console.log('Using personalized default questions instead');
         // Continue with personalized default questions
       }
     }
@@ -247,13 +256,10 @@ Focus on:
 - Clarity and structure
 - Specific actionable improvements`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.3
-  });
-  
-  return JSON.parse(completion.choices[0].message.content);
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const text = response.text();
+  return JSON.parse(text);
 }
 
 // Generate final interview report
@@ -284,13 +290,10 @@ Create a JSON report:
   "nextSteps": ["..."]
 }`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.4
-  });
-  
-  return JSON.parse(completion.choices[0].message.content);
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  const text = response.text();
+  return JSON.parse(text);
 }
 
 // Generate CV/cover letter
@@ -317,13 +320,10 @@ Generate:
   }
 }`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.5
-    });
-    
-    res.json(JSON.parse(completion.choices[0].message.content));
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    res.json(JSON.parse(text));
   } catch (error) {
     console.error('Error generating CV:', error);
     res.status(500).json({ error: 'Failed to generate CV' });
@@ -491,13 +491,10 @@ app.post('/api/quiz/submit', async (req, res) => {
       "nextSteps": ["..."]
     }`;
     
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.6
-    });
-    
-    const aiFeedback = JSON.parse(completion.choices[0].message.content);
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    const aiFeedback = JSON.parse(text);
     
     res.json({
       score,

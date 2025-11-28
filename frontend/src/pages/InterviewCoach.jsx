@@ -78,7 +78,10 @@ function InterviewCoach() {
       };
       
       recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
+        // Ignore network errors - they're common and don't affect functionality
+        if (event.error !== 'network') {
+          console.error('Speech recognition error:', event.error);
+        }
         // Don't reset transcript on error - accumulatedFinalTranscript persists
       };
     }
@@ -150,10 +153,24 @@ function InterviewCoach() {
     
     try {
       const text = await readFileAsText(file);
-      setCvText(text);
+      // Clean up the text - remove excessive whitespace and check if it's valid
+      const cleanedText = text.trim().replace(/\s+/g, ' ');
+      
+      if (cleanedText.length < 50) {
+        throw new Error('File appears to be empty or could not be parsed. Please ensure it contains text.');
+      }
+      
+      // Check if it looks like raw PDF binary data
+      if (cleanedText.includes('%PDF') && cleanedText.length < 200) {
+        throw new Error('PDF parsing failed. Please try converting to DOCX or TXT format, or ensure the PDF contains selectable text.');
+      }
+      
+      setCvText(cleanedText);
+      console.log('CV parsed successfully, length:', cleanedText.length);
     } catch (error) {
       console.error('Error reading CV:', error);
-      alert('Error reading CV file. Please try again.');
+      alert(error.message || 'Error reading CV file. Please try a different format (TXT, DOCX) or ensure the PDF has selectable text.');
+      setCvFile(null);
     } finally {
       setIsUploading(false);
     }
@@ -168,22 +185,108 @@ function InterviewCoach() {
     
     try {
       const text = await readFileAsText(file);
-      setJdText(text);
+      // Clean up the text - remove excessive whitespace and check if it's valid
+      const cleanedText = text.trim().replace(/\s+/g, ' ');
+      
+      if (cleanedText.length < 50) {
+        throw new Error('File appears to be empty or could not be parsed. Please ensure it contains text.');
+      }
+      
+      // Check if it looks like raw PDF binary data
+      if (cleanedText.includes('%PDF') && cleanedText.length < 200) {
+        throw new Error('PDF parsing failed. Please try converting to DOCX or TXT format, or ensure the PDF contains selectable text.');
+      }
+      
+      setJdText(cleanedText);
+      console.log('JD parsed successfully, length:', cleanedText.length);
     } catch (error) {
       console.error('Error reading JD:', error);
-      alert('Error reading Job Description file. Please try again.');
+      alert(error.message || 'Error reading Job Description file. Please try a different format (TXT, DOCX) or ensure the PDF has selectable text.');
+      setJdFile(null);
     } finally {
       setIsUploading(false);
     }
   };
   
-  const readFileAsText = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
-      reader.onerror = (e) => reject(e);
-      reader.readAsText(file);
-    });
+  const readFileAsText = async (file) => {
+    // Check if it's a PDF file
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      try {
+        console.log('Starting PDF parsing for:', file.name);
+        
+        // Use PDF.js to parse PDF - dynamic import with proper worker setup
+        const pdfjsLib = await import('pdfjs-dist');
+        console.log('PDF.js loaded, version:', pdfjsLib.version);
+        
+        // Set worker source using CDN (more reliable than local worker)
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+        
+        const arrayBuffer = await file.arrayBuffer();
+        console.log('PDF file loaded, size:', arrayBuffer.byteLength, 'bytes');
+        
+        const loadingTask = pdfjsLib.getDocument({ 
+          data: arrayBuffer,
+          useSystemFonts: true,
+          verbosity: 0 // Suppress warnings
+        });
+        
+        const pdf = await loadingTask.promise;
+        console.log('PDF loaded, pages:', pdf.numPages);
+        
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          try {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+              .map(item => item.str)
+              .filter(str => str.trim().length > 0)
+              .join(' ');
+            
+            if (pageText.trim().length > 0) {
+              fullText += pageText + '\n\n';
+            }
+          } catch (pageError) {
+            console.warn(`Error reading page ${i}:`, pageError);
+            // Continue with other pages
+          }
+        }
+        
+        const cleanedText = fullText.trim();
+        console.log('PDF parsing complete, extracted text length:', cleanedText.length);
+        
+        if (cleanedText.length < 10) {
+          throw new Error('PDF appears to be image-based or has no extractable text. Please use a PDF with selectable text, or convert to DOCX/TXT format.');
+        }
+        
+        return cleanedText;
+      } catch (error) {
+        console.error('PDF parsing error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        
+        // Provide more helpful error message
+        if (error.message.includes('Invalid PDF')) {
+          throw new Error('Invalid PDF file. Please ensure the file is not corrupted.');
+        } else if (error.message.includes('password')) {
+          throw new Error('PDF is password protected. Please remove the password and try again.');
+        } else if (error.message.includes('image-based')) {
+          throw error; // Already has good message
+        } else {
+          throw new Error(`PDF parsing failed: ${error.message}. Try converting to DOCX or TXT format.`);
+        }
+      }
+    } else {
+      // For text files, read as text
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (e) => reject(e);
+        reader.readAsText(file);
+      });
+    }
   };
 
   const handleStartInterview = async () => {
