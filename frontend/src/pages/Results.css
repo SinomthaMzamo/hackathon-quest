@@ -1,0 +1,302 @@
+.results {
+  min-height: calc(100vh - 70px);
+  padding: 2rem 0;
+}
+
+.results-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.results-header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+
+.results-header p {
+  font-size: 1.125rem;
+  color: var(--text-light);
+}
+
+.score-section {
+  margin-bottom: 2rem;
+  padding: 3rem 2rem;
+}
+
+.score-display-large {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3rem;
+}
+
+.score-circle-large {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+}
+
+.score-number-large {
+  font-size: 4rem;
+  font-weight: 700;
+}
+
+.score-info {
+  text-align: left;
+}
+
+.score-info h2 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.readiness-badge {
+  display: inline-block;
+  padding: 0.75rem 2rem;
+  background: var(--success);
+  color: white;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 1.25rem;
+}
+
+.strengths-card,
+.weaknesses-card {
+  padding: 2rem;
+}
+
+.strengths-card h3,
+.weaknesses-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--text);
+}
+
+.strengths-card ul,
+.weaknesses-card ul {
+  list-style: none;
+  padding: 0;
+}
+
+.strengths-card li,
+.weaknesses-card li {
+  padding: 0.75rem 0;
+  padding-left: 2rem;
+  position: relative;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.strengths-card li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--success);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.weaknesses-card li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--warning);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.cultural-fit,
+.recommendations,
+.next-steps {
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.cultural-fit h3,
+.recommendations h3,
+.next-steps h3 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.cultural-fit p {
+  color: var(--text);
+  line-height: 1.8;
+  font-size: 1.125rem;
+}
+
+.recommendations ul,
+.next-steps ul {
+  list-style: none;
+  padding: 0;
+}
+
+.recommendations li,
+.next-steps li {
+  padding: 0.75rem 0;
+  padding-left: 2rem;
+  position: relative;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.recommendations li::before,
+.next-steps li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+
+.cv-section {
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.cv-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--text);
+}
+
+.cv-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.cv-item {
+  padding: 1.5rem;
+  background: var(--bg);
+  border-radius: 0.75rem;
+}
+
+.cv-item h4 {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: var(--text);
+}
+
+.cv-item p {
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.job-matching {
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.job-matching h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.job-matching p {
+  color: var(--text-light);
+  margin-bottom: 1.5rem;
+}
+
+.job-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.job-tag {
+  padding: 0.5rem 1rem;
+  background: var(--primary);
+  color: white;
+  border-radius: 9999px;
+  font-weight: 500;
+}
+
+.share-section {
+  margin: 2rem 0;
+}
+
+.share-section .card {
+  padding: 2rem;
+  text-align: center;
+}
+
+.share-section h3 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+
+.share-section p {
+  color: var(--text-light);
+  margin-bottom: 1.5rem;
+}
+
+.share-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .results-header h1 {
+    font-size: 2rem;
+  }
+  
+  .score-display-large {
+    flex-direction: column;
+    gap: 2rem;
+  }
+  
+  .score-circle-large {
+    width: 150px;
+    height: 150px;
+  }
+  
+  .score-number-large {
+    font-size: 3rem;
+  }
+  
+  .score-info {
+    text-align: center;
+  }
+  
+  .share-actions,
+  .actions {
+    flex-direction: column;
+  }
+  
+  .share-actions .btn,
+  .actions .btn {
+    width: 100%;
+  }
+}
