@@ -126,8 +126,9 @@ async def process_answer(
         "analysis": analysis
     }
 
-    # Generate Feedback Audio
-    spoken_feedback = f"{analysis['feedback_text']}"
+    # Generate Feedback Audio (UPDATED)
+    # Includes the main feedback text AND the specific tip.
+    spoken_feedback = f"{analysis['feedback_text']} Here is a tip: {analysis['improvement_tip']}"
     feedback_audio_b64 = text_to_speech_sa(spoken_feedback)
 
     return {
