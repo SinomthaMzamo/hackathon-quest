@@ -44,7 +44,7 @@ async def init_session(
     questions = generate_questions_from_cv(final_cv_text, job_description)
     
     first_q_text = questions[0]
-    intro_text = f"Sawubona! Let's start. {first_q_text}"
+    intro_text = f"Vuka here, your copilot in your journey to land your dream job! Let's start. {first_q_text}"
     audio_b64 = text_to_speech_sa(intro_text)
     
     sessions[session_id] = {
