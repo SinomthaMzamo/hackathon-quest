@@ -1,44 +1,59 @@
-import axios from "axios";
-
 const API_URL = "http://localhost:8000";
 
 export const initSession = async (cvFile, cvText, jobDescription) => {
   const formData = new FormData();
-
-  // Always send JD
+  if (cvFile) formData.append("cv_file", cvFile);
+  if (cvText) formData.append("cv_text", cvText);
   formData.append("job_description", jobDescription);
 
-  // Send either file OR text
-  if (cvFile) {
-    formData.append("cv_file", cvFile);
-  } else if (cvText) {
-    formData.append("cv_text", cvText);
-  }
-
-  const response = await axios.post(`${API_URL}/init-session`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+  const response = await fetch(`${API_URL}/init-session`, {
+    method: "POST",
+    body: formData,
   });
-  return response.data;
+
+  if (!response.ok) throw new Error("Failed to init session");
+  return response.json();
 };
 
 export const sendAudioAnswer = async (sessionId, audioBlob) => {
   const formData = new FormData();
   formData.append("session_id", sessionId);
-  // Naming it .wav helps the backend identify it as audio
   formData.append("audio_file", audioBlob, "answer.wav");
 
-  const response = await axios.post(`${API_URL}/process-answer`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+  const response = await fetch(`${API_URL}/process-answer`, {
+    method: "POST",
+    body: formData,
   });
-  return response.data;
+
+  if (!response.ok) throw new Error("Failed to process answer");
+  return response.json();
 };
 
+// --- NEW FUNCTIONS ---
 
-export const fetchNextQuestion = async (sessionId) => {
+export const setQuestionIndex = async (sessionId, index) => {
   const formData = new FormData();
   formData.append("session_id", sessionId);
-  const response = await axios.post(`${API_URL}/next-question`, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+  formData.append("index", index);
+
+  const response = await fetch(`${API_URL}/set-question`, {
+    method: "POST",
+    body: formData,
   });
-  return response.data;
+
+  if (!response.ok) throw new Error("Failed to set question");
+  return response.json();
+};
+
+export const fetchReport = async (sessionId) => {
+  const formData = new FormData();
+  formData.append("session_id", sessionId);
+
+  const response = await fetch(`${API_URL}/generate-report`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) throw new Error("Failed to generate report");
+  return response.json();
 };
