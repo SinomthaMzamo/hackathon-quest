@@ -123,6 +123,38 @@
   font-weight: 600;
 }
 
+.timer-display {
+  display: flex;
+  align-items: center;
+}
+
+.timer {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary);
+  font-family: 'Courier New', monospace;
+  padding: 0.5rem 1rem;
+  background: #f3f4f6;
+  border-radius: 0.5rem;
+  min-width: 80px;
+  text-align: center;
+}
+
+.timer-warning {
+  color: var(--danger);
+  background: #fee2e2;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
 .question-text {
   font-size: 1.5rem;
   line-height: 1.6;

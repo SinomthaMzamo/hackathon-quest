@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt'],
+      includeAssets: ['favicon.ico', 'robots.txt', 'pdf.worker.min.mjs'],
       manifest: {
         name: 'VoiceCoach AI - Interview & Workplace Readiness',
         short_name: 'VoiceCoach AI',

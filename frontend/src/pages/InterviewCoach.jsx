@@ -4,6 +4,10 @@ import { Mic, MicOff, Play, Pause, CheckCircle, AlertCircle, Loader, Upload, Fil
 import { startInterview, submitAnswer } from '../services/api';
 import './InterviewCoach.css';
 
+// PDF.js worker is now in public directory for reliable local access
+// Files in public/ are served at root in Vite, so we can reference it as /pdf.worker.min.mjs
+const PDF_WORKER_URL = '/pdf.worker.min.mjs';
+
 function InterviewCoach() {
   const navigate = useNavigate();
   const [step, setStep] = useState('setup'); // setup, interview, complete
@@ -14,6 +18,10 @@ function InterviewCoach() {
   const [answers, setAnswers] = useState([]);
   const [feedback, setFeedback] = useState(null);
   const [finalReport, setFinalReport] = useState(null);
+  const [timeRemaining, setTimeRemaining] = useState(90); // 90 seconds = 1 minute 30 seconds
+  const [questionNumber, setQuestionNumber] = useState(1);
+  const timerIntervalRef = useRef(null);
+  const isSubmittingRef = useRef(false); // Prevent double submission
   
   // Setup form
   const [industry, setIndustry] = useState('');
@@ -38,6 +46,53 @@ function InterviewCoach() {
     pace: 'normal',
     tone: 'neutral'
   });
+
+  // Timer effect - countdown and auto-submit
+  useEffect(() => {
+    if (step === 'interview' && isRecording && timeRemaining > 0) {
+      timerIntervalRef.current = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            // Timer reached 0, auto-submit
+            clearInterval(timerIntervalRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    }
+    
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    };
+  }, [step, isRecording, timeRemaining]);
+
+  // Auto-submit when timer reaches 0
+  useEffect(() => {
+    if (step === 'interview' && timeRemaining === 0 && isRecording && !isSubmittingRef.current) {
+      isSubmittingRef.current = true;
+      handleSubmitAnswer().finally(() => {
+        isSubmittingRef.current = false;
+      });
+    }
+  }, [timeRemaining, step, isRecording]);
+
+  // Reset timer when question changes
+  useEffect(() => {
+    if (step === 'interview' && currentQuestion) {
+      setTimeRemaining(90);
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    }
+  }, [currentQuestion, step]);
 
   useEffect(() => {
     // Initialize Web Speech API for transcription
@@ -104,6 +159,7 @@ function InterviewCoach() {
       // Reset transcript when starting new recording for a new question
       transcriptRef.current = '';
       accumulatedFinalTranscript.current = ''; // Reset accumulated transcript for new question
+      // Timer will start automatically via useEffect when isRecording becomes true
       if (recognitionRef.current) {
         recognitionRef.current.stop(); // Stop any existing recognition
         // Small delay to ensure clean restart
@@ -218,8 +274,16 @@ function InterviewCoach() {
         const pdfjsLib = await import('pdfjs-dist');
         console.log('PDF.js loaded, version:', pdfjsLib.version);
         
-        // Set worker source using CDN (more reliable than local worker)
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+        // Set worker source - use local worker from public directory (most reliable)
+        // Files in public/ are served at root, so /pdf.worker.min.mjs works
+        // This avoids any CDN dependency issues
+        const version = pdfjsLib.version;
+        
+        // Primary: Local worker from public directory (always available, no network dependency)
+        // PDF.js 5.x uses ES modules, so .mjs extension is correct
+        pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL;
+        
+        console.log('PDF.js worker configured (local):', pdfjsLib.GlobalWorkerOptions.workerSrc);
         
         const arrayBuffer = await file.arrayBuffer();
         console.log('PDF file loaded, size:', arrayBuffer.byteLength, 'bytes');
@@ -268,7 +332,12 @@ function InterviewCoach() {
         });
         
         // Provide more helpful error message
-        if (error.message.includes('Invalid PDF')) {
+        if (error.message.includes('worker') || error.message.includes('Failed to fetch') || error.message.includes('dynamically imported') || error.message.includes('Loading worker')) {
+          // Worker loading error - provide helpful message
+          console.error('PDF.js worker loading failed:', error.message);
+          console.log('Attempted worker URL:', PDF_WORKER_URL);
+          throw new Error('PDF parsing failed: Unable to load PDF processing service. Please ensure you are running the development server, or convert your PDF to DOCX or TXT format.');
+        } else if (error.message.includes('Invalid PDF')) {
           throw new Error('Invalid PDF file. Please ensure the file is not corrupted.');
         } else if (error.message.includes('password')) {
           throw new Error('PDF is password protected. Please remove the password and try again.');
@@ -316,6 +385,8 @@ function InterviewCoach() {
       clearTimeout(timeoutId);
       setSessionId(response.sessionId);
       setCurrentQuestion(response.question);
+      setQuestionNumber(1);
+      setTimeRemaining(90);
       setStep('interview');
       setIsProcessing(false);
     } catch (error) {
@@ -433,18 +504,30 @@ function InterviewCoach() {
     
     setSessionId(demoSessionId);
     setCurrentQuestion(demoQuestions[0]);
+    setQuestionNumber(1);
+    setTimeRemaining(90);
     setStep('interview');
     setIsProcessing(false);
   };
 
   const handleSubmitAnswer = async () => {
-    if (!transcriptRef.current.trim()) {
-      alert('Please provide an answer');
+    // Prevent double submission
+    if (isSubmittingRef.current) {
       return;
+    }
+    isSubmittingRef.current = true;
+    
+    // Stop timer
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
     }
     
     stopRecording();
     setIsProcessing(true);
+    
+    // Get the answer (use transcript or empty string if timer ran out)
+    const answerText = transcriptRef.current.trim() || 'No answer provided (time expired)';
     
     try {
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
@@ -452,28 +535,70 @@ function InterviewCoach() {
       
       const response = await submitAnswer({
         sessionId,
-        answer: transcriptRef.current,
-        transcript: transcriptRef.current,
+        answer: answerText,
+        transcript: answerText,
         audioMetrics
       });
       
-      setAnswers(prev => [...prev, {
+      const newAnswers = [...answers, {
         question: currentQuestion,
-        answer: transcriptRef.current,
+        answer: answerText,
         feedback: response.feedback
-      }]);
+      }];
+      setAnswers(newAnswers);
       
-      if (response.complete) {
-        setFinalReport(response.report);
-        setStep('complete');
-        } else {
-          setCurrentQuestion(response.nextQuestion);
-          setFeedback(response.feedback);
-          transcriptRef.current = '';
-          accumulatedFinalTranscript.current = ''; // Reset for next question
-          audioChunksRef.current = [];
-          setAudioMetrics({ fillerWords: 0, pace: 'normal', tone: 'neutral' });
+      // Check if we've answered 5 questions
+      if (newAnswers.length >= 5 || response.complete) {
+        // Get final report
+        try {
+          const finalResponse = await fetch(`http://localhost:3001/api/interview/${sessionId}/complete`, {
+            method: 'POST'
+          });
+          if (finalResponse.ok) {
+            const finalData = await finalResponse.json();
+            setFinalReport(finalData.report || response.report);
+          } else {
+            setFinalReport(response.report || {
+              overallScore: 75,
+              readinessLevel: 'Intermediate',
+              strengths: ['Completed all questions'],
+              weaknesses: [],
+              saCulturalFit: 'Good',
+              recommendations: ['Continue practicing'],
+              cvSuggestions: 'Review your CV',
+              coverLetterSuggestions: 'Customize your cover letter',
+              matchingJobTypes: [role],
+              nextSteps: ['Complete Workplace Readiness modules']
+            });
+          }
+        } catch (err) {
+          console.error('Error getting final report:', err);
+          setFinalReport(response.report || {
+            overallScore: 75,
+            readinessLevel: 'Intermediate',
+            strengths: ['Completed all questions'],
+            weaknesses: [],
+            saCulturalFit: 'Good',
+            recommendations: ['Continue practicing'],
+            cvSuggestions: 'Review your CV',
+            coverLetterSuggestions: 'Customize your cover letter',
+            matchingJobTypes: [role],
+            nextSteps: ['Complete Workplace Readiness modules']
+          });
         }
+        setStep('complete');
+      } else {
+        // Move to next question
+        const nextQNum = questionNumber + 1;
+        setQuestionNumber(nextQNum);
+        setCurrentQuestion(response.nextQuestion);
+        setFeedback(response.feedback);
+        setTimeRemaining(90); // Reset timer for next question
+        transcriptRef.current = '';
+        accumulatedFinalTranscript.current = ''; // Reset for next question
+        audioChunksRef.current = [];
+        setAudioMetrics({ fillerWords: 0, pace: 'normal', tone: 'neutral' });
+      }
     } catch (error) {
       console.error('Error submitting answer:', error);
       
@@ -504,19 +629,20 @@ function InterviewCoach() {
           feedback: 'Demo mode: In a real session, you would receive AI-powered feedback here.'
         }]);
         
+        const answerText = transcriptRef.current.trim() || 'No answer provided (time expired)';
         const currentAnswers = [...answers, {
           question: currentQuestion,
-          answer: transcriptRef.current,
+          answer: answerText,
           feedback: 'Demo mode: In a real session, you would receive AI-powered feedback here.'
         }];
         setAnswers(currentAnswers);
         
         if (currentAnswers.length >= 5) {
-          // Complete demo interview
+          // Complete demo interview after 5 questions
           setFinalReport({
             overallScore: 75,
             readinessLevel: 'Intermediate',
-            strengths: ['Good communication', 'Clear answers'],
+            strengths: ['Good communication', 'Clear answers', 'Completed all questions'],
             weaknesses: ['Could provide more examples'],
             saCulturalFit: 'Demo mode - AI analysis would appear here',
             recommendations: ['Practice more', 'Work on examples'],
@@ -527,8 +653,11 @@ function InterviewCoach() {
           });
           setStep('complete');
         } else {
+          const nextQNum = questionNumber + 1;
+          setQuestionNumber(nextQNum);
           setCurrentQuestion(demoQuestions[currentAnswers.length] || demoQuestions[0]);
           setFeedback('Demo mode: Continue to next question');
+          setTimeRemaining(90); // Reset timer for next question
           transcriptRef.current = '';
           accumulatedFinalTranscript.current = ''; // Reset for next question
           audioChunksRef.current = [];
@@ -539,6 +668,7 @@ function InterviewCoach() {
       }
     } finally {
       setIsProcessing(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -693,8 +823,15 @@ function InterviewCoach() {
           <div className="question-card card">
             <div className="question-header">
               <span className="question-number">
-                Question {answers.length + 1} of 5
+                Question {questionNumber} of 5
               </span>
+              {isRecording && (
+                <div className="timer-display">
+                  <span className={`timer ${timeRemaining <= 10 ? 'timer-warning' : ''}`}>
+                    {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+                  </span>
+                </div>
+              )}
             </div>
             <h2 className="question-text">{currentQuestion?.question}</h2>
             
