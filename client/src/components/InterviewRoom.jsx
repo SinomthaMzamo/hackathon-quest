@@ -23,7 +23,7 @@ export default function InterviewRoom({ sessionData }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [reportData, setReportData] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false); // Track audio playing state
+  const [isPlaying, setIsPlaying] = useState(false);
 
   // UI View
   const [activeTab, setActiveTab] = useState("interview");
@@ -35,7 +35,6 @@ export default function InterviewRoom({ sessionData }) {
   const playAudio = (b64) => {
     if (!b64) return;
 
-    // Toggle logic if clicking the same audio
     if (
       !audioRef.current.paused &&
       audioRef.current.src.includes(b64.slice(0, 10))
@@ -55,13 +54,12 @@ export default function InterviewRoom({ sessionData }) {
     audioRef.current.play().catch((e) => console.log("Audio play err", e));
   };
 
-  // NOTE: Auto-play useEffect removed intentionally.
-
   // --- RECORDING HOOK ---
   const { status, startRecording, stopRecording, clearBlobUrl } =
     useReactMediaRecorder({
       audio: true,
       onStop: async (blobUrl, blob) => {
+        // Redundant safety check: ensure processing is still true
         setIsProcessing(true);
         try {
           const result = await sendAudioAnswer(sessionData.session_id, blob);
@@ -70,7 +68,6 @@ export default function InterviewRoom({ sessionData }) {
             analysis: result.feedback,
           });
           setFeedbackAudio(result.audio_base64);
-          // Feedback still auto-plays as it is a direct response
           playAudio(result.audio_base64);
         } catch (err) {
           console.error(err);
@@ -80,6 +77,31 @@ export default function InterviewRoom({ sessionData }) {
         }
       },
     });
+
+  // --- WRAPPER HANDLERS (THE FIX) ---
+
+  const handleStartRecording = (e) => {
+    if (e && e.cancelable) e.preventDefault(); // Stop ghost clicks
+
+    // Clear previous state immediately
+    setFeedback(null);
+    setFeedbackAudio(null);
+    audioRef.current.pause();
+    setIsPlaying(false);
+
+    startRecording();
+  };
+
+  const handleStopRecording = (e) => {
+    if (e && e.cancelable) e.preventDefault();
+
+    // CRITICAL FIX: Set isProcessing to TRUE immediately.
+    // This fills the gap between releasing the button and the 'onStop' callback firing.
+    // It prevents the UI from reverting to "Listen to the question..."
+    setIsProcessing(true);
+
+    stopRecording();
+  };
 
   // --- HANDLERS ---
   const handleJumpToQuestion = async (index) => {
@@ -91,7 +113,7 @@ export default function InterviewRoom({ sessionData }) {
     setIsProcessing(true);
     setFeedback(null);
     setFeedbackAudio(null);
-    audioRef.current.pause(); // Stop any playing audio
+    audioRef.current.pause();
     setIsPlaying(false);
 
     try {
@@ -133,7 +155,7 @@ export default function InterviewRoom({ sessionData }) {
     setShowReport(false);
   };
 
-  // --- REPORT VIEW (Unchanged Logic, just re-rendering) ---
+  // --- REPORT VIEW ---
   if (showReport && reportData) {
     return (
       <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8 overflow-y-auto font-sans">
@@ -516,18 +538,18 @@ export default function InterviewRoom({ sessionData }) {
                 ) : (
                   <div className="flex flex-col items-center justify-center select-none touch-none">
                     <button
-                      onMouseDown={startRecording}
-                      onMouseUp={stopRecording}
-                      onTouchStart={startRecording}
-                      onTouchEnd={stopRecording}
+                      onMouseDown={handleStartRecording}
+                      onMouseUp={handleStopRecording}
+                      onTouchStart={handleStartRecording}
+                      onTouchEnd={handleStopRecording}
                       className={`
-      w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center transition-all duration-200 shadow-2xl 
-      ${
-        status === "recording"
-          ? "bg-red-500 scale-110 shadow-red-500/40"
-          : "bg-gradient-to-br from-yellow-400 to-yellow-600 hover:scale-105 shadow-yellow-500/30 text-black"
-      }
-    `}
+                        w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center transition-all duration-200 shadow-2xl 
+                        ${
+                          status === "recording"
+                            ? "bg-red-500 scale-110 shadow-red-500/40"
+                            : "bg-gradient-to-br from-yellow-400 to-yellow-600 hover:scale-105 shadow-yellow-500/30 text-black"
+                        }
+                      `}
                     >
                       {status === "recording" ? (
                         <Square className="w-8 h-8 fill-current text-white" />
