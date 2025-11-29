@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useReactMediaRecorder } from "react-media-recorder";
 import {
   Mic, Square, Volume2, ArrowRight, RotateCcw, Loader2,
-  CheckCircle, AlertCircle, Play, List, Star, BarChart2, X, ChevronLeft
+  CheckCircle, AlertCircle, Play, List, Star, BarChart2, X, ChevronLeft, Pause
 } from "lucide-react";
 import { sendAudioAnswer, setQuestionIndex, fetchReport } from "../api";
 
@@ -23,28 +23,39 @@ export default function InterviewRoom({ sessionData }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [reportData, setReportData] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false); // Track audio playing state
 
   // UI View
-  const [activeTab, setActiveTab] = useState("interview"); // 'interview' or 'star'
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default closed on mobile
+  const [activeTab, setActiveTab] = useState("interview");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const audioRef = useRef(new Audio());
 
   // --- AUDIO HELPERS ---
   const playAudio = (b64) => {
     if (!b64) return;
+
+    // Toggle logic if clicking the same audio
+    if (
+      !audioRef.current.paused &&
+      audioRef.current.src.includes(b64.slice(0, 10))
+    ) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+      return;
+    }
+
     audioRef.current.pause();
     audioRef.current.currentTime = 0;
     audioRef.current.src = `data:audio/mp3;base64,${b64}`;
+    audioRef.current.onended = () => setIsPlaying(false);
+    audioRef.current.onpause = () => setIsPlaying(false);
+    audioRef.current.onplay = () => setIsPlaying(true);
+
     audioRef.current.play().catch((e) => console.log("Audio play err", e));
   };
 
-  useEffect(() => {
-    // Only auto-play if we are in interview mode and not viewing report
-    if (currentAudio && !showReport && activeTab === "interview") {
-      playAudio(currentAudio);
-    }
-  }, [currentAudio, showReport, activeTab]);
+  // NOTE: Auto-play useEffect removed intentionally.
 
   // --- RECORDING HOOK ---
   const { status, startRecording, stopRecording, clearBlobUrl } =
@@ -59,6 +70,7 @@ export default function InterviewRoom({ sessionData }) {
             analysis: result.feedback,
           });
           setFeedbackAudio(result.audio_base64);
+          // Feedback still auto-plays as it is a direct response
           playAudio(result.audio_base64);
         } catch (err) {
           console.error(err);
@@ -72,7 +84,6 @@ export default function InterviewRoom({ sessionData }) {
   // --- HANDLERS ---
   const handleJumpToQuestion = async (index) => {
     if (index === currentIndex) {
-      // Just close sidebar on mobile if clicking same question
       setIsSidebarOpen(false);
       return;
     }
@@ -80,12 +91,15 @@ export default function InterviewRoom({ sessionData }) {
     setIsProcessing(true);
     setFeedback(null);
     setFeedbackAudio(null);
+    audioRef.current.pause(); // Stop any playing audio
+    setIsPlaying(false);
+
     try {
       const res = await setQuestionIndex(sessionData.session_id, index);
       setCurrentIndex(res.index);
       setCurrentAudio(res.audio_base64);
       setActiveTab("interview");
-      setIsSidebarOpen(false); // Close sidebar after selection (mobile UX)
+      setIsSidebarOpen(false);
     } catch (e) {
       console.error(e);
     } finally {
@@ -117,16 +131,13 @@ export default function InterviewRoom({ sessionData }) {
 
   const handleBackToPractice = () => {
     setShowReport(false);
-    // Optional: Replay current question audio to re-orient user
-    // playAudio(currentAudio);
   };
 
-  // --- REPORT VIEW ---
+  // --- REPORT VIEW (Unchanged Logic, just re-rendering) ---
   if (showReport && reportData) {
     return (
       <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8 overflow-y-auto font-sans">
         <div className="max-w-4xl mx-auto space-y-6 md:space-y-8 pb-10">
-          {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4 gap-4">
             <h1 className="text-2xl md:text-3xl font-bold text-yellow-500">
               Performance Report
@@ -147,7 +158,6 @@ export default function InterviewRoom({ sessionData }) {
             </div>
           </div>
 
-          {/* Scores */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <div className="col-span-2 md:col-span-1 bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-800 text-center">
               <div className="text-3xl md:text-4xl font-bold text-green-500 mb-2">
@@ -172,7 +182,6 @@ export default function InterviewRoom({ sessionData }) {
             ))}
           </div>
 
-          {/* Summary */}
           <div className="bg-slate-900 p-6 md:p-8 rounded-xl border border-slate-800">
             <h3 className="text-lg md:text-xl font-bold mb-4 flex items-center text-slate-200">
               <BarChart2 className="mr-2 w-5 h-5" /> Summary
@@ -182,7 +191,6 @@ export default function InterviewRoom({ sessionData }) {
             </p>
           </div>
 
-          {/* Strengths & Weaknesses */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             <div className="bg-slate-900/50 p-6 rounded-xl border border-green-900/30">
               <h3 className="text-lg font-bold text-green-400 mb-4">
@@ -219,7 +227,7 @@ export default function InterviewRoom({ sessionData }) {
   // --- MAIN INTERVIEW VIEW ---
   return (
     <div className="flex h-screen bg-slate-950 text-white font-sans overflow-hidden relative">
-      {/* MOBILE BACKDROP FOR SIDEBAR */}
+      {/* MOBILE BACKDROP */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-sm"
@@ -227,7 +235,7 @@ export default function InterviewRoom({ sessionData }) {
         />
       )}
 
-      {/* SIDEBAR (Responsive) */}
+      {/* SIDEBAR */}
       <div
         className={`
             fixed md:relative z-40 h-full bg-slate-900 border-r border-slate-800 transition-all duration-300 ease-in-out flex flex-col
@@ -243,7 +251,6 @@ export default function InterviewRoom({ sessionData }) {
             <h2 className="font-bold text-yellow-500 text-lg">Question List</h2>
             <p className="text-xs text-slate-400">Select to jump ahead</p>
           </div>
-          {/* Close button for mobile only */}
           <button
             onClick={() => setIsSidebarOpen(false)}
             className="md:hidden text-slate-400 hover:text-white"
@@ -290,20 +297,18 @@ export default function InterviewRoom({ sessionData }) {
         </div>
       </div>
 
-      {/* MAIN CONTENT AREA */}
+      {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col relative w-full">
         {/* HEADER */}
         <div className="h-16 md:h-20 border-b border-slate-800 flex items-center justify-between px-4 md:px-6 bg-slate-950/90 backdrop-blur-md z-20 shrink-0">
           <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
-            {/* Toggle Sidebar Button */}
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 focus:outline-none focus:ring-2 focus:ring-yellow-500/50"
+              className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 focus:outline-none"
             >
               <List className="w-6 h-6" />
             </button>
 
-            {/* Tabs - Scaled down gracefully */}
             <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800 shrink-0">
               <button
                 onClick={() => setActiveTab("interview")}
@@ -344,10 +349,10 @@ export default function InterviewRoom({ sessionData }) {
           </div>
         </div>
 
-        {/* CONTENT BODY */}
+        {/* CONTENT */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center">
           {activeTab === "star" ? (
-            // --- STAR PREP VIEW ---
+            // STAR PREP
             <div className="w-full max-w-5xl space-y-6 animate-in fade-in">
               <div className="text-center mb-6 md:mb-8">
                 <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">
@@ -395,38 +400,41 @@ export default function InterviewRoom({ sessionData }) {
               </div>
             </div>
           ) : (
-            // --- ACTIVE INTERVIEW VIEW ---
+            // INTERVIEW
             <div className="w-full max-w-xl flex flex-col h-full justify-between animate-in slide-in-from-bottom-4 py-2">
-              {/* Question Area */}
+              {/* Question Area - UPDATED FOR MANUAL PLAY */}
               <div className="text-center space-y-4 md:space-y-6 mt-2 md:mt-8">
-                <div
-                  className={`mx-auto w-16 h-16 md:w-24 md:h-24 rounded-full flex items-center justify-center transition-all ${
-                    status === "recording"
-                      ? "bg-red-500/20 scale-110 shadow-lg shadow-red-500/20"
-                      : "bg-yellow-500/10"
-                  }`}
-                >
-                  <Volume2
-                    className={`w-6 h-6 md:w-10 md:h-10 ${
-                      status === "recording"
-                        ? "text-red-500 animate-pulse"
-                        : "text-yellow-500"
-                    }`}
-                  />
-                </div>
-                <div
-                  className="relative group cursor-pointer px-2"
+                {/* Central Play Button */}
+                <button
                   onClick={() => playAudio(currentAudio)}
+                  className={`
+                                    mx-auto w-16 h-16 md:w-24 md:h-24 rounded-full flex items-center justify-center transition-all shadow-xl
+                                    ${
+                                      status === "recording"
+                                        ? "bg-red-500/20 scale-110 shadow-lg shadow-red-500/20 cursor-default"
+                                        : "bg-yellow-500 hover:bg-yellow-400 text-black cursor-pointer hover:scale-105"
+                                    }
+                                `}
+                  disabled={status === "recording"}
                 >
+                  {status === "recording" ? (
+                    <Mic className="w-6 h-6 md:w-10 md:h-10 text-red-500 animate-pulse" />
+                  ) : isPlaying ? (
+                    <Pause className="w-6 h-6 md:w-10 md:h-10 text-black fill-current" />
+                  ) : (
+                    <Play className="w-6 h-6 md:w-10 md:h-10 text-black fill-current ml-1" />
+                  )}
+                </button>
+
+                <div className="relative px-2">
                   <h2 className="text-xl md:text-2xl lg:text-3xl font-bold leading-tight text-slate-100">
                     {questions[currentIndex]}
                   </h2>
-                  <div className="hidden md:block absolute -right-8 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Play className="w-6 h-6 text-slate-500" />
-                  </div>
-                  <p className="md:hidden text-xs text-slate-500 mt-2">
-                    (Tap to replay audio)
-                  </p>
+                  {!isPlaying && status !== "recording" && (
+                    <p className="text-xs text-yellow-500 mt-3 font-bold uppercase tracking-widest animate-pulse">
+                      Tap Button to Listen
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -438,7 +446,15 @@ export default function InterviewRoom({ sessionData }) {
                       onClick={() => playAudio(feedbackAudio)}
                       className="absolute top-4 right-4 p-2 bg-slate-800 rounded-full text-green-500 hover:bg-slate-700 shadow-sm border border-slate-700"
                     >
-                      <Volume2 className="w-4 h-4 md:w-5 md:h-5" />
+                      {isPlaying &&
+                      feedbackAudio &&
+                      audioRef.current.src.includes(
+                        feedbackAudio.slice(0, 10)
+                      ) ? (
+                        <Pause className="w-4 h-4" />
+                      ) : (
+                        <Volume2 className="w-4 h-4" />
+                      )}
                     </button>
                     <div className="mb-4 pr-8">
                       <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">
@@ -465,8 +481,10 @@ export default function InterviewRoom({ sessionData }) {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-slate-600 text-xs md:text-sm italic animate-pulse">
-                    {isProcessing ? "Analyzing your answer..." : "Listening..."}
+                  <div className="text-slate-600 text-xs md:text-sm italic">
+                    {isProcessing
+                      ? "Analyzing your answer..."
+                      : "Listen to the question, then record your answer."}
                   </div>
                 )}
               </div>
@@ -496,20 +514,20 @@ export default function InterviewRoom({ sessionData }) {
                     </button>
                   </div>
                 ) : (
-                  <div className="text-center select-none touch-none">
+                  <div className="flex flex-col items-center justify-center select-none touch-none">
                     <button
                       onMouseDown={startRecording}
                       onMouseUp={stopRecording}
                       onTouchStart={startRecording}
                       onTouchEnd={stopRecording}
                       className={`
-                                            w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center transition-all duration-200 shadow-2xl 
-                                            ${
-                                              status === "recording"
-                                                ? "bg-red-500 scale-110 shadow-red-500/40"
-                                                : "bg-gradient-to-br from-yellow-400 to-yellow-600 hover:scale-105 shadow-yellow-500/30 text-black"
-                                            }
-                                        `}
+      w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center transition-all duration-200 shadow-2xl 
+      ${
+        status === "recording"
+          ? "bg-red-500 scale-110 shadow-red-500/40"
+          : "bg-gradient-to-br from-yellow-400 to-yellow-600 hover:scale-105 shadow-yellow-500/30 text-black"
+      }
+    `}
                     >
                       {status === "recording" ? (
                         <Square className="w-8 h-8 fill-current text-white" />
@@ -517,7 +535,8 @@ export default function InterviewRoom({ sessionData }) {
                         <Mic className="w-8 h-8 md:w-10 md:h-10" />
                       )}
                     </button>
-                    <p className="text-slate-500 text-[10px] font-bold uppercase mt-4 tracking-widest">
+
+                    <p className="text-slate-500 text-[10px] font-bold uppercase mt-4 tracking-widest text-center">
                       {status === "recording"
                         ? "Release to Send"
                         : "Hold to Speak"}
