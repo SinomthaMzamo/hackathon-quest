@@ -53,7 +53,7 @@ export default function Onboarding({ onStart }) {
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-6 bg-slate-900 p-8 rounded-2xl shadow-2xl border border-slate-800"
+          className="space-y-6 bg-slate-900 p-6 rounded-2xl shadow-2xl border border-slate-800"
         >
           {/* Job Description (Always Visible) */}
           <div>
@@ -115,17 +115,23 @@ export default function Onboarding({ onStart }) {
                 />
                 <label htmlFor="cv-upload" className="cursor-pointer block">
                   {cvFile ? (
-                    <div className="text-green-400 flex flex-col items-center">
+                    <div className="text-green-400 flex flex-col items-center max-w-xs mx-auto text-center">
                       <FileText className="w-8 h-8 mb-2" />
-                      <span className="text-sm font-bold">{cvFile.name}</span>
+                      {/* Truncate long filenames */}
+                      <span
+                        className="text-sm font-bold truncate w-40"
+                        title={cvFile.name} // show full filename on hover
+                      >
+                        {cvFile.name}
+                      </span>
                       <span className="text-xs text-slate-500 mt-1">
                         Click to change
                       </span>
                     </div>
                   ) : (
-                    <div className="text-slate-400 flex flex-col items-center">
+                    <div className="text-slate-400 flex flex-col items-center max-w-xs mx-auto text-center">
                       <Upload className="w-8 h-8 mb-2" />
-                      <span className="text-sm">
+                      <span className="text-sm break-words">
                         Click to upload PDF, DOCX, TXT
                       </span>
                     </div>
